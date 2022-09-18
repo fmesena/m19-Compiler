@@ -1,0 +1,209 @@
+%{
+//-- don't change *any* of these: if you do, you'll break the compiler.
+#include <cdk/compiler.h>
+#include "ast/all.h"
+#define LINE               compiler->scanner()->lineno()
+#define yylex()            compiler->scanner()->scan()
+#define yyerror(s)         compiler->scanner()->error(s)
+#define YYPARSE_PARAM_TYPE std::shared_ptr<cdk::compiler>
+#define YYPARSE_PARAM      compiler
+//-- don't change *any* of these --- END!
+%}
+
+%union {
+  int                   i;	/* integer value */
+  double                d;
+  std::string          *s;	/* symbol name or string literal */
+  cdk::basic_node      *node;	/* node pointer */
+  cdk::sequence_node   *sequence;
+  cdk::expression_node *expression; /* expression nodes */
+  cdk::lvalue_node     *lvalue;
+};
+
+%token <i> tINTEGER
+%token <s> tID tSTRING
+%token <d> tREAL
+%token tPRINTLN tPRINT tREAD tBREAK tCONTINUE tRETURN
+
+%right '='
+%left '|'
+%left '&'
+%left tEQ tNE
+%left tGE tLE '>' '<'
+%left '+' '-'
+%left '*' '/' '%'
+%nonassoc tUNARY '?' tNOT
+
+%type <node> stmt program
+%type <sequence> list
+%type <expression> expr
+%type <lvalue> lval
+
+%{
+//-- The rules below will be included in yyparse, the main parsing function.
+%}
+%%
+
+program	: list func                  {compiler->ast($1); }
+        ;
+
+func    :func_def                    {$$ = $1;}
+        |func_decl                   {$$ = $1;}
+        |func_call                   {$$ = $1;}
+        ;
+    
+
+func_def    :ret tID '!' '(' vars ')' literal body             {new m19::function_definition_node(LINE, $1, $2, 0, $5, $7, $8);}
+            |ret tID '?' '(' vars ')' literal body             {new m19::function_definition_node(LINE, $1, $2, 1, $5, $7, $8);}
+            |ret tID     '(' vars ')'                          {new m19::function_definition_node(LINE, $1, $2, 2, $5, $7, $8);}
+            ;
+            
+func_decl   :ret tID '!' '(' vars ')'                            {new m19::function_declaration_node(LINE, $1, $2, 0, $5);}
+            |ret tID '?' '(' vars ')'                            {new m19::function_declaration_node(LINE, $1, $2, 1, $5);}
+            |ret tID     '(' vars ')'                            {new m19::function_declaration_node(LINE, $1, $2, 2, $5);}
+            ;
+
+func_call   :tID '(' vars ')'                                   {new m19::function_call_node(LINE, $1, $3);}
+            ;
+
+ret         :tipo                   {$$ = $1;}
+            |'!'                    {$$ = new basic_type(0, basic_type::TYPE_VOID);}
+            ;
+
+tipo        :'#'                    {$$ = new basic_type(4, basic_type::TYPE_INT);}
+            |'%'                    {$$ = new basic_type(8, basic_type::TYPE_DOUBLE);}
+            |'$'                    {$$ = new basic_type(4, basic_type::TYPE_STRING);}
+            |'<' tipo '>'           {$$ = new basic_type(4, basic_type::TYPE_POINTER); $$->_subtype = $2;}
+            ;
+
+vars        :var                    {$$ = $1;}
+            |vars ',' var           {$$ = new cdk::sequence(LINE, )}
+            |/*empty*/
+            ;
+
+var         :tipo tID '!' init      {$$ = new variable_node(LINE, $1, $2, 0, $4);}
+            |tipo tID '?' init      {$$ = new variable_node(LINE, $1, $2, 1, $4);}
+            |tipo tID     init      {$$ = new variable_node(LINE, $1, $2, 2, $4);}
+            ;
+            
+init        :'=' expr
+            |/*empty*/
+            ;
+   
+literal     :'=' lit_tipo
+            |/*empty*/
+            ;
+            
+lit_tipo    :tINTEGER
+            |tSTRING
+            |tREAL
+            ;
+
+bloco       :'{' decls instrs '}'
+            ;
+
+decls       :declr
+            !decls declr
+            |/*empty*/
+            ;
+
+declr       :var ';'
+            |func
+            ;
+
+body        :initial_sec secs final_sec
+            |initial_sec secs
+            |            secs final_sec
+            |            secs
+            |/*empty*/
+            ;
+
+secs        :sec
+            |secs sec
+            |/*empty*/
+            ;
+
+initial_sec :'<<' bloco
+            ;
+
+final_sec   :'>>' bloco
+            ;
+        
+secs        :'[' exprs ']' bloco
+            |'(' exprs ')' bloco
+            |              bloco
+            ;
+            
+exprs       : expr
+            |exprs ',' expr
+            |/*empty*/
+            ;
+        
+instrs      :instr
+            |instrs instr
+            |/*empty*/
+            ;
+            
+instr       :expr ';'                                               { $$ = new m19::evaluation_node(LINE, $1); }
+            |expr tPRINT                                            { $$ = new m19::print_node(LINE, $1, false); }
+            |expr tPRINTLN                                          { $$ = new m19::print_node(LINE, $1, true); }
+            |tBREAK                                                 { $$ = new m19::break_node(LINE); }
+            |tCONTINUE                                              { $$ = new m19::continue_node(LINE); }
+            |tRETURN                                                { $$ = new m19::return_node(LINE); }
+            |tREAD                                                  { $$ = new m19::read_node(LINE); }
+            |inst_cond                                              { $$ = $1; }
+            |inst_iter                                              { $$ = $1; }
+            |bloco                                                  { $$ = $1; }
+            ;
+            
+inst_cond   :'[' expr ']' '#' instr
+            |'[' expr ']' '?' instr
+            |'[' expr ']' '?' instr ':' instr                       { $$ = new m19::if_else_node(LINE, $2, $5, $7); }
+            ;
+            
+inst_iter   :'[' vars ';' exprs ';' exprs ']' instr
+            |'[' exprs ';' exprs ';' exprs ']' instr
+            
+            
+            
+            
+
+	      
+	      
+/*list : stmt	     { $$ = new cdk::sequence_node(LINE, $1); }
+	   | list stmt { $$ = new cdk::sequence_node(LINE, $2, $1); }
+	   ;
+
+stmt : expr ';'                         { $$ = new m19::evaluation_node(LINE, $1); }
+ 	   | tPRINT expr ';'                  { $$ = new m19::print_node(LINE, $2); }
+     | tREAD ';'                   { $$ = new m19::read_node(LINE); }
+     | tFOR '[' list ';' list ';' list ']' stmt         { $$ = new m19::for_node(LINE, $3, $5, $7, $9); }
+     | tIF '[' expr ']' '#' stmt %prec tIF { $$ = new m19::if_node(LINE, $3, $6); }
+     | tIF '[' expr ']' '?' stmt tELSE stmt { $$ = new m19::if_else_node(LINE, $3, $6, $8); }
+     | '{' list '}'                     { $$ = $2; }
+     ;*/
+
+expr : tINTEGER                { $$ = new cdk::integer_node(LINE, $1); }
+	   | tSTRING                 { $$ = new cdk::string_node(LINE, $1); }
+     | '-' expr %prec tUNARY   { $$ = new cdk::neg_node(LINE, $2); }
+     | '-' expr %prec tUNARY
+     | expr '+' expr	         { $$ = new cdk::add_node(LINE, $1, $3); }
+     | expr '-' expr	         { $$ = new cdk::sub_node(LINE, $1, $3); }
+     | expr '*' expr	         { $$ = new cdk::mul_node(LINE, $1, $3); }
+     | expr '/' expr	         { $$ = new cdk::div_node(LINE, $1, $3); }
+     | expr '%' expr	         { $$ = new cdk::mod_node(LINE, $1, $3); }
+     | expr '<' expr	         { $$ = new cdk::lt_node(LINE, $1, $3); }
+     | expr '>' expr	         { $$ = new cdk::gt_node(LINE, $1, $3); }
+     | expr tGE expr	         { $$ = new cdk::ge_node(LINE, $1, $3); }
+     | expr tLE expr           { $$ = new cdk::le_node(LINE, $1, $3); }
+     | expr tNE expr	         { $$ = new cdk::ne_node(LINE, $1, $3); }
+     | expr tEQ expr	         { $$ = new cdk::eq_node(LINE, $1, $3); }
+     | '(' expr ')'            { $$ = $2; }
+     | lval                    { $$ = new cdk::rvalue_node(LINE, $1); }  //FIXME
+     | lval '=' expr           { $$ = new cdk::assignment_node(LINE, $1, $3); }
+     ;
+
+lval : tIDENTIFIER             { $$ = new cdk::variable_node(LINE, $1); }
+     ;
+
+%%

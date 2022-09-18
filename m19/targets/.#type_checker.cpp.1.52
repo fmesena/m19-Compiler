@@ -1,0 +1,585 @@
+#include <string>
+#include "targets/type_checker.h"
+#include "ast/all.h"  // automatically generated
+
+#define ASSERT_UNSPEC \
+    { if (node->type() != nullptr && \
+          node->type()->name() != basic_type::TYPE_UNSPEC) return; }
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_sequence_node(cdk::sequence_node * const node, int lvl) {
+    for(size_t i = 0; i < node->size(); i++)
+        node->node(i)->accept(this, lvl);
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_nil_node(cdk::nil_node * const node, int lvl) {
+  // EMPTY
+}
+void m19::type_checker::do_data_node(cdk::data_node * const node, int lvl) {
+  // EMPTY
+}
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_double_node(cdk::double_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    node->type(new basic_type(4, basic_type::TYPE_DOUBLE));
+}
+
+void m19::type_checker::do_integer_node(cdk::integer_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->type(new basic_type(4, basic_type::TYPE_INT));
+}
+
+void m19::type_checker::do_string_node(cdk::string_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->type(new basic_type(4, basic_type::TYPE_STRING));
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::processUnaryExpression(cdk::unary_expression_node * const node, int lvl) {
+  node->argument()->accept(this, lvl + 2);
+  if (node->argument()->type()->name() == basic_type::TYPE_INT)
+      node->type(new basic_type(4, basic_type::TYPE_INT));
+  else if(node->argument()->type()->name() == basic_type::TYPE_DOUBLE)
+      node->type(new basic_type(4, basic_type::TYPE_DOUBLE));
+  else
+      throw std::string("wrong type in argument of unary expression");
+}
+
+
+void m19::type_checker::processBinaryExpression(cdk::binary_expression_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->left()->accept(this, lvl + 2);
+  node->right()->accept(this, lvl + 2);
+  
+  if (node->left()->type()->name() == basic_type::TYPE_DOUBLE && node->right()->type()->name() == basic_type::TYPE_DOUBLE)
+    node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+  else if (node->left()->type()->name() == basic_type::TYPE_DOUBLE && node->right()->type()->name() == basic_type::TYPE_INT)
+    node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+  else if (node->left()->type()->name() == basic_type::TYPE_INT && node->right()->type()->name() == basic_type::TYPE_DOUBLE)
+    node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+  else if (node->left()->type()->name() == basic_type::TYPE_POINTER && node->right()->type()->name() == basic_type::TYPE_INT)
+    node->type(new basic_type(4, basic_type::TYPE_POINTER));
+  else if (node->left()->type()->name() == basic_type::TYPE_INT && node->right()->type()->name() == basic_type::TYPE_POINTER)
+    node->type(new basic_type(4, basic_type::TYPE_POINTER));
+  else if (node->left()->type()->name() == basic_type::TYPE_INT && node->right()->type()->name() == basic_type::TYPE_INT)
+    node->type(new basic_type(4, basic_type::TYPE_INT));
+  else if (node->left()->type()->name() == basic_type::TYPE_UNSPEC && node->right()->type()->name() == basic_type::TYPE_UNSPEC) {
+    node->type(new basic_type(4, basic_type::TYPE_INT));
+    node->left()->type(new basic_type(4, basic_type::TYPE_INT));
+    node->right()->type(new basic_type(4, basic_type::TYPE_INT));
+  } else
+    throw std::string("wrong types in binary expression");
+}
+
+void m19::type_checker::processMultExpression(cdk::binary_expression_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    node->left()->accept(this, lvl + 2);
+    if(node->left()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type in left argument of binary expression");
+
+    node->right()->accept(this, lvl + 2);
+    if (node->right()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type in right argument of binary expression");
+    
+    if(node->left()->type()->name() == basic_type::TYPE_INT && node->right()->type()->name() == basic_type::TYPE_INT)
+        node->type(new basic_type(4, basic_type::TYPE_INT));
+    else if(node->left()->type()->name() == basic_type::TYPE_DOUBLE && node->right()->type()->name() == basic_type::TYPE_DOUBLE)
+        node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+    else if(node->left()->type()->name() == basic_type::TYPE_DOUBLE && node->right()->type()->name() == basic_type::TYPE_INT)
+        node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+    else if(node->left()->type()->name() == basic_type::TYPE_INT && node->right()->type()->name() == basic_type::TYPE_DOUBLE)
+        node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+    else if(node->left()->type()->name() == basic_type::TYPE_UNSPEC && node->right()->type()->name() == basic_type::TYPE_UNSPEC){
+        node->type(new basic_type(4, basic_type::TYPE_INT));
+        node->left()->type(new basic_type(4, basic_type::TYPE_INT));
+        node->right()->type(new basic_type(4, basic_type::TYPE_INT));
+    } else{
+        throw std::string("wrong types in multiplicative expression");
+    }
+}
+
+void m19::type_checker::processModExpression(cdk::binary_expression_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    node->left()->accept(this, lvl + 2);
+    if(node->left()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type in left argument of binary expression");
+
+    node->right()->accept(this, lvl + 2);
+    if (node->right()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type in right argument of binary expression");
+    
+    node->type(new basic_type(4, basic_type::TYPE_INT));
+}
+
+void m19::type_checker::do_CompareExpression(cdk::binary_expression_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->left()->accept(this, lvl + 2);
+  node->right()->accept(this, lvl + 2);
+
+  node->type(new basic_type(4, basic_type::TYPE_INT));
+}
+
+
+void m19::type_checker::do_EqualExpression(cdk::binary_expression_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->left()->accept(this, lvl + 2);
+  node->right()->accept(this, lvl + 2);
+  if (node->left()->type()->name() != node->right()->type()->name()) throw std::string(
+      "same type expected on both sides of equality operator");
+  node->type(new basic_type(4, basic_type::TYPE_INT));
+}
+
+
+void m19::type_checker::do_BooleanLogicalExpression(cdk::binary_expression_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->left()->accept(this, lvl + 2);
+  if (node->left()->type()->name() != basic_type::TYPE_INT) throw std::string("integer expression expected in binary expression");
+
+  node->right()->accept(this, lvl + 2);
+  if (node->right()->type()->name() != basic_type::TYPE_INT) throw std::string("integer expression expected in binary expression");
+
+  node->type(new basic_type(4, basic_type::TYPE_INT));
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_add_node(cdk::add_node * const node, int lvl) {
+    processBinaryExpression(node, lvl);
+}
+void m19::type_checker::do_sub_node(cdk::sub_node * const node, int lvl) {
+    processBinaryExpression(node, lvl);
+}
+
+void m19::type_checker::do_mul_node(cdk::mul_node * const node, int lvl) {
+    processMultExpression(node, lvl);
+}
+
+void m19::type_checker::do_div_node(cdk::div_node * const node, int lvl) {
+    processMultExpression(node, lvl);
+}
+
+void m19::type_checker::do_mod_node(cdk::mod_node * const node, int lvl) {
+    processModExpression(node, lvl);
+}
+
+
+void m19::type_checker::do_neg_node(cdk::neg_node * const node, int lvl) {
+    processUnaryExpression(node, lvl);
+}
+
+void m19::type_checker::do_identity_node(m19::identity_node *const node, int lvl) {
+    processUnaryExpression(node, lvl);
+}
+
+void m19::type_checker::do_not_node(cdk::not_node * const node, int lvl) {
+  ASSERT_UNSPEC;
+  node->argument()->accept(this, lvl + 2);
+  if (node->argument()->type()->name() == basic_type::TYPE_INT)
+    node->type(new basic_type(4, basic_type::TYPE_INT));
+  else if (node->argument()->type()->name() == basic_type::TYPE_UNSPEC) {
+    node->type(new basic_type(4, basic_type::TYPE_INT));
+    node->argument()->type(new basic_type(4, basic_type::TYPE_INT));
+  } else
+    throw std::string("wrong type in not logical expression");
+}
+
+
+void m19::type_checker::do_and_node(cdk::and_node * const node, int lvl) {
+  do_BooleanLogicalExpression(node, lvl);
+}
+
+void m19::type_checker::do_or_node(cdk::or_node * const node, int lvl) {
+  do_BooleanLogicalExpression(node, lvl);
+}
+
+void m19::type_checker::do_lt_node(cdk::lt_node * const node, int lvl) {
+  do_CompareExpression(node, lvl);
+}
+void m19::type_checker::do_le_node(cdk::le_node * const node, int lvl) {
+  do_CompareExpression(node, lvl);
+}
+void m19::type_checker::do_ge_node(cdk::ge_node * const node, int lvl) {
+  do_CompareExpression(node, lvl);
+}
+void m19::type_checker::do_gt_node(cdk::gt_node * const node, int lvl) {
+  do_CompareExpression(node, lvl);
+}
+
+void m19::type_checker::do_ne_node(cdk::ne_node * const node, int lvl) {
+  do_EqualExpression(node, lvl);
+}
+void m19::type_checker::do_eq_node(cdk::eq_node * const node, int lvl) {
+  do_EqualExpression(node, lvl);
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_variable_node(cdk::variable_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    const std::string id = node->name();
+    std::shared_ptr<m19::symbol> symbol;
+    
+    if(id == "@")
+        symbol = _symtab.find("@" + _function->name());
+    else
+        symbol = _symtab.find(id); 
+    
+    if (symbol != nullptr) {
+        basic_type *type = symbol->type(); 
+        node->type(type);
+    } else {
+        throw id;
+    }
+}
+
+void m19::type_checker::do_rvalue_node(cdk::rvalue_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    try {
+        node->lvalue()->accept(this, lvl);
+        node->type(node->lvalue()->type());
+    } catch (const std::string &id) {
+        throw std::string("undeclared variable '" + id + "'");
+    }
+}
+
+void m19::type_checker::do_assignment_node(cdk::assignment_node * const node, int lvl) {
+    ASSERT_UNSPEC;
+    node->lvalue()->accept(this, lvl + 4);
+    node->rvalue()->accept(this, lvl + 4);
+
+    if (node->lvalue()->type()->name() == basic_type::TYPE_INT) {
+        if (node->rvalue()->type()->name() == basic_type::TYPE_INT)
+            node->type(new basic_type(4, basic_type::TYPE_INT));
+        else if (node->rvalue()->type()->name() == basic_type::TYPE_UNSPEC) {
+            node->type(new basic_type(4, basic_type::TYPE_INT));
+            node->rvalue()->type(new basic_type(4, basic_type::TYPE_INT));
+        } else throw std::string("wrong type: right value of assignment expression must be int");
+        
+    } else if (node->lvalue()->type()->name() == basic_type::TYPE_DOUBLE) {
+        if (node->rvalue()->type()->name() == basic_type::TYPE_INT || node->rvalue()->type()->name() == basic_type::TYPE_DOUBLE) 
+            node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+        else if (node->rvalue()->type()->name() == basic_type::TYPE_UNSPEC) {
+            node->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+            node->rvalue()->type(new basic_type(8, basic_type::TYPE_DOUBLE));
+        } else throw std::string("wrong type: right value of assignment expression must be int or double");
+        
+    } else if (node->lvalue()->type()->name() == basic_type::TYPE_STRING) {
+        if (node->rvalue()->type()->name() == basic_type::TYPE_STRING)
+            node->type(new basic_type(4, basic_type::TYPE_STRING));
+        else if (node->rvalue()->type()->name() == basic_type::TYPE_UNSPEC) {
+            node->type(new basic_type(4, basic_type::TYPE_STRING));
+            node->rvalue()->type(new basic_type(4, basic_type::TYPE_STRING));
+        } else throw std::string("wrong type: right value of assignment expression must be string");
+        
+    } else if (node->lvalue()->type()->name() == basic_type::TYPE_POINTER) {
+        if (node->rvalue()->type()->name() == basic_type::TYPE_POINTER)
+            node->type(new basic_type(4, basic_type::TYPE_POINTER));
+        /*else if (node->rvalue()->type()->name() == basic_type::TYPE_INT) {
+            node->rvalue()->lvalue()
+        }*/ else if (node->rvalue()->type()->name() == basic_type::TYPE_UNSPEC) {
+            node->type(new basic_type(4, basic_type::TYPE_ERROR));
+            node->rvalue()->type(new basic_type(4, basic_type::TYPE_ERROR));
+        } else throw std::string("wrong type in right value of assignment expression");
+        
+    } else throw std::string("wrong type in left value of assignment expression");
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_evaluation_node(m19::evaluation_node * const node, int lvl) {
+    node->argument()->accept(this, lvl + 2);
+}
+
+void m19::type_checker::do_print_node(m19::print_node * const node, int lvl) {
+    node->argument()->accept(this, lvl + 2);
+    //if(node->argument()->type()->name() == basic_type::TYPE_VOID) throw std::string ("wrong type in print argument");
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_read_node(m19::read_node * const node, int lvl) {
+    
+
+  /*try {
+    node->argument()->accept(this, lvl);
+  } catch (const std::string &id) {
+    throw "undeclared variable '" + id + "'";
+  }*/
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_for_node(m19::for_node * const node, int lvl) {    
+    if(node->condition()){
+        node->condition()->accept(this, lvl + 4);
+        cdk::expression_node *expr = dynamic_cast<cdk::expression_node*>(node->condition()->node(node->condition()->size() - 1));
+        expr->accept(this, lvl + 4);
+        if(expr->type()->name() != basic_type::TYPE_INT)
+            throw std::string ("expected interger condition");
+    }
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_if_node(m19::if_node * const node, int lvl) {
+    node->condition()->accept(this, lvl + 4);
+    if(node->condition()->type()->name() != basic_type::TYPE_INT) throw std::string("expected integer condition");
+}
+
+void m19::type_checker::do_if_else_node(m19::if_else_node * const node, int lvl) {
+    node->condition()->accept(this, lvl + 4);
+    if(node->condition()->type()->name() != basic_type::TYPE_INT) throw std::string("expected integer condition");
+}
+
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_body_node(m19::body_node *const node, int lvl) {
+    if(node->initial() == nullptr && node->sections() == nullptr && node->fin() == nullptr) throw std::string("invalid empty body");
+    
+    if(node->initial()) node->initial()->accept(this, lvl + 2);
+    if(node->sections()) node->sections()->accept(this, lvl + 2);
+    if(node->fin()) node->fin()->accept(this, lvl + 2);
+}
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_initial_section_node(m19::initial_section_node *const node, int lvl) {
+    node->block()->accept(this, lvl + 2);
+}
+
+void m19::type_checker::do_section_node(m19::section_node *const node, int lvl) {
+    if(node->expression() != nullptr){
+        node->expression()->accept(this, lvl + 2);
+        if(node->expression()->type()->name() != basic_type::TYPE_INT) throw std::string ("expected integer condition");        
+    }
+    node->block()->accept(this, lvl + 2);
+}
+
+void m19::type_checker::do_final_section_node(m19::final_section_node *const node, int lvl) {
+    node->block()->accept(this, lvl + 2);
+}
+
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_block_node(m19::block_node *const node, int lvl) {
+    if(node->declaration()) node->declaration()->accept(this, lvl + 2);
+    if(node->instruction()) node->instruction()->accept(this, lvl + 2);
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_alloc_node(m19::alloc_node *const node, int lvl) {
+    
+    ASSERT_UNSPEC;
+    node->size()->accept(this, lvl + 2);
+    if (node->size()->type()->name() != basic_type::TYPE_INT) throw std::string("integer expression expected in allocation expression");
+    
+    auto pointertype = new basic_type(4, basic_type::TYPE_POINTER);
+    pointertype->_subtype = new basic_type(0, basic_type::TYPE_UNSPEC);
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_address_node(m19::address_node *const node, int lvl) {
+    ASSERT_UNSPEC;
+    node->lvalue()->accept(this, lvl + 2);
+    if (node->lvalue()->type()->name() != basic_type::TYPE_POINTER) 
+        node->type(new basic_type(4, basic_type::TYPE_POINTER));
+    else throw std::string("wrong address type");
+}
+
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_index_node(m19::index_node *const node, int lvl) {
+    ASSERT_UNSPEC;
+    
+    node->pointer()->accept(this, lvl + 2);
+    if(node->pointer()->type()->name() != basic_type::TYPE_POINTER) 
+        throw std::string("invalid pointer type");
+    node->index()->accept(this, lvl + 2);
+    if(node->index()->type()->name() != basic_type::TYPE_INT) 
+        throw std::string("invalid pointer type");
+}
+
+
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_return_node(m19::return_node *const node, int lvl) {
+    if(_function->type()->name() == basic_type::TYPE_VOID) throw std::string("return specified for void function");
+
+  // EMPTY
+}
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_continue_node(m19::continue_node *const node, int lvl) {
+  // EMPTY
+}
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_break_node(m19::break_node * const node, int lvl) {
+    // EMPTY
+}
+
+
+
+//---------------------------------------------------------------------------
+void m19::type_checker::do_variable_declaration_node(m19::variable_declaration_node *const node, int lvl) {
+        
+    if (node->init() != nullptr) {
+        node->init()->accept(this, lvl);
+        if (node->type()->name() == basic_type::TYPE_INT){
+            if (node->init()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type, integer expected");
+        } else if (node->type()->name() == basic_type::TYPE_DOUBLE){
+            if (node->init()->type()->name() != basic_type::TYPE_DOUBLE || node->init()->type()->name() != basic_type::TYPE_INT) throw std::string("wrong type, double expected");
+        } else if (node->type()->name() == basic_type::TYPE_STRING){
+            if (node->init()->type()->name() != basic_type::TYPE_STRING) throw std::string("wrong type, string expected");
+        } else if (node->type()->name() == basic_type::TYPE_POINTER){
+            if (node->init()->type()->name() != basic_type::TYPE_POINTER) throw std::string("wrong type, pointer expected");
+        } else {
+            throw std::string("unknown type");
+        }
+    }
+    const std::string &id = node->identifier();
+    std::shared_ptr<m19::symbol> symbol = std::make_shared<m19::symbol> (node->type(), id, node->qualifier(), (bool)node->init(), false, false);
+    
+    if (!_symtab.insert(id, symbol))
+        throw std::string("variable '" + id + "' redeclared");
+    _parent->set_new_symbol(symbol);
+}
+
+//---------------------------------------------------------------------------
+
+void m19::type_checker::do_function_declaration_node(m19::function_declaration_node *const node, int lvl) {
+    
+    std::string id;
+        
+    if (node->identifier() == "m19") id = "_main";
+    else if (node->identifier() == "_main") id = "._main";
+    else id = node->identifier();
+    
+    std::shared_ptr<m19::symbol> function = std::make_shared<m19::symbol> (node->type(), id, node->qualifier(), false, true, true);
+    std::shared_ptr<m19::symbol> previous = _symtab.find(function->name());
+    
+    if (previous){
+        if (node->arguments()->size() != previous->args().size())
+            throw std::string("wrong number of arguments");
+        else {
+            for (size_t i = 0; i < node->arguments()->size(); i++) {
+                cdk::basic_node *b = node->arguments()->node(i);
+                m19::variable_declaration_node *v = (m19::variable_declaration_node *) &b;
+                basic_type *t = v->type();
+                
+                if ((t->name() == basic_type::TYPE_INT && function->elem(i)->name() != basic_type::TYPE_INT) || (t->name() != basic_type::TYPE_INT && function->elem(i)->name() == basic_type::TYPE_INT) || (t->name() == basic_type::TYPE_DOUBLE && function->elem(i)->name() != basic_type::TYPE_DOUBLE) || (t->name() != basic_type::TYPE_DOUBLE && function->elem(i)->name() == basic_type::TYPE_DOUBLE) || (t->name() == basic_type::TYPE_STRING && function->elem(i)->name() != basic_type::TYPE_STRING) || (t->name() != basic_type::TYPE_STRING && function->elem(i)->name() == basic_type::TYPE_STRING))
+                    throw std::string("wrong type of arguments");
+            }
+        }
+    } else{
+        _symtab.insert(function->name(), function);
+        _parent->set_new_symbol(function);
+    }
+    
+}
+
+void m19::type_checker::do_function_definition_node(m19::function_definition_node *const node, int lvl) {
+    std::string id;
+    
+    if (node->identifier() == "m19") id = "_main";
+    else if (node->identifier() == "_main") id = "._main";
+    else id = node->identifier();
+        
+    bool hasLiteral = false;
+
+    if(node->literal()){
+        node->literal()->accept(this, lvl);
+        if (node->literal()->type()->name() != node->type()->name()) throw std::string ("incompatible types");
+        
+        std::string literalId = "@" + id;
+                        
+        std::shared_ptr<m19::symbol> literal = std::make_shared<m19::symbol> (node->literal()->type(), literalId, 0, false,false);
+        _symtab.insert(literalId, literal);
+        _parent->set_new_symbol(literal);
+        hasLiteral = true;
+    }
+    else if(!node->literal() && node->type()->name() != basic_type::TYPE_VOID){
+        std::string literalId = "@" + id;
+                        
+        std::shared_ptr<m19::symbol> literal = std::make_shared<m19::symbol> (node->type(), literalId, 0, false,false);
+        _symtab.insert(literalId, literal);
+        _parent->set_new_symbol(literal);
+    }
+
+    std::shared_ptr<m19::symbol> function = std::make_shared<m19::symbol> (node->type(), id, node->qualifier(), hasLiteral, true);
+    function->offset(-node->type()->size());
+    
+    for (size_t i = 0; i < node->arguments()->size(); i++) {
+        cdk::basic_node *b = node->arguments()->node(i);
+        m19::variable_declaration_node *v = (m19::variable_declaration_node *) &b;
+        basic_type *t = v->type();
+        
+        /*m19::variable_declaration_node *v = dynamic_cast<m19::variable_declaration_node *>(node->arguments()->node(i));
+        basic_type *t = v->type();*/
+        
+        function->args(t);
+    }
+    
+    /*std::cout << "conteudo dos argumentos de " << function->name() << std::endl;
+    for (size_t i = 0; i < function->args().size(); i++){
+        std::cout << function->elem(i)->name() << std::endl;
+    }
+    std::cout << "------------------------" << std::endl;*/        
+        
+    std::shared_ptr<m19::symbol> previous = _symtab.find(function->name());
+    
+    if (previous){
+        if (previous->forward() && previous->qualifier() == node->qualifier()){ //foi declarado mas nao foi definido
+        _symtab.replace(function->name(), function);
+        _parent->set_new_symbol(function);
+        
+        } else throw std::string("conflict definition for '" + function->name() + "'"); //funcao ja foi definida
+    } else {                            //ainda nao foi declarada nem definida
+        _symtab.insert(function->name(), function);
+        _parent->set_new_symbol(function);
+    }
+}
+
+void m19::type_checker::do_function_call_node(m19::function_call_node *const node, int lvl) {
+    ASSERT_UNSPEC;
+    const std::string &id = node->identifier();
+        
+    std::shared_ptr<m19::symbol> symbol = _symtab.find(id);
+    
+    if (symbol == nullptr) throw std::string("symbol '" + id + "' undeclared");
+    
+    if (!symbol->isFunction()) throw std::string("symbol '" + id + "' is not a function");
+    
+    node->type(symbol->type());
+    
+    if(node->arguments() && !symbol->forward()){
+        if (node->arguments()->size() != symbol->args().size())
+            throw std::string("wrong number of arguments");
+        else {
+            for (size_t i = 0; i < node->arguments()->size(); i++) {
+                cdk::basic_node *b = node->arguments()->node(i);
+                m19::variable_declaration_node *v = (m19::variable_declaration_node *) &b;
+                basic_type *t = v->type();
+                //std::cout << "2 " << std::endl;
+                //m19::variable_declaration_node *v = dynamic_cast<m19::variable_declaration_node *>(node->arguments()->node(i));
+                //std::cout << "3 " << std::endl;
+                //basic_type *t = v->type();
+                //std::cout << "4 " << std::endl;
+                //std::cout << (t->name() == basic_type::TYPE_INT) << std::endl;
+                
+                //std::cout << "symbol " << symbol->elem(i)->name() << std::endl;
+                
+                if ((t->name() == basic_type::TYPE_INT && symbol->elem(i)->name() != basic_type::TYPE_INT) || /*(t->name() != basic_type::TYPE_INT && symbol->elem(i)->name() == basic_type::TYPE_INT) ||*/ (t->name() == basic_type::TYPE_DOUBLE && symbol->elem(i)->name() != basic_type::TYPE_DOUBLE) /*|| (t->name() != basic_type::TYPE_DOUBLE && symbol->elem(i)->name() == basic_type::TYPE_DOUBLE)*/ || (t->name() == basic_type::TYPE_STRING && symbol->elem(i)->name() != basic_type::TYPE_STRING) /*|| (t->name() != basic_type::TYPE_STRING && symbol->elem(i)->name() == basic_type::TYPE_STRING)*/)
+                    throw std::string("wrong type of arguments");
+            }
+            node->arguments()->accept(this, lvl+4);
+        }
+        
+    }
+}
+
+
+
